@@ -1,115 +1,105 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import { supabase } from "@/lib/auth/supabase";
 import { Coordinates } from "@/lib/types";
 
-type Edge= {
-    destination:string;
-    weight:number;
-  };
+export function haversine(coord1: Coordinates, coord2: Coordinates): number {
+  const rlat1 = coord1.latitude * (Math.PI / 180);
+  const rlong1 = coord1.longitude * (Math.PI / 180);
+  const rlat2 = coord2.latitude * (Math.PI / 180);
+  const rlong2 = coord2.longitude * (Math.PI / 180);
 
-type Graph= Record<string, Edge[]>;
+  const diffLat = rlat1 - rlat2;
+  const diffLong = rlong1 - rlong2;
 
-function buildAirportLookup(): Record<string, Coordinates> {
-  const airportCoords: Record<string, Coordinates> = {};
-  const fileContent= fs.readFileSync(path.join(__dirname, 'airports.dat'), 'utf-8');
-  const lines= fileContent.split('\n');
-
-
-  for (const line of lines){
-    if(!line.trim()) continue;
-
-    const fields= line.split(',');
-    const airportId= fields[0].replace(/"/g, '');
-    const latitude= parseFloat(fields[6]);
-    const longitude= parseFloat(fields[7]);
-
-    if (isNaN(latitude) || isNaN(longitude)) continue;
-    airportCoords[airportId]= {latitude, longitude};
-  }
-  return airportCoords;
-}
-
-export function haversine(coord1: Coordinates, coord2:Coordinates): number{
-  const rlat1= coord1.latitude * (Math.PI/180);
-  const rlong1= coord1.longitude * (Math.PI/180);
-  const rlat2= coord2.latitude * (Math.PI/180);
-  const rlong2= coord2.longitude * (Math.PI/180);
-
-  const diffLat= rlat1-rlat2;
-  const diffLong= rlong1-rlong2;
-
-  const a= Math.sin(diffLat/2)**2 + Math.cos(rlat1)*Math.cos(rlat2)* Math.sin(diffLong/2)**2;
-  const c= 2 * Math.asin(Math.min(1,Math.sqrt(a)));
-  const distance= 6371 *c;
+  const a =
+    Math.sin(diffLat / 2) ** 2 +
+    Math.cos(rlat1) * Math.cos(rlat2) * Math.sin(diffLong / 2) ** 2;
+  const c = 2 * Math.asin(Math.min(1, Math.sqrt(a)));
+  const distance = 6371 * c;
 
   return distance;
-
 }
 
-function buildGraph(airportCoords:Record<string, Coordinates>){
-  const fileContent= fs.readFileSync(path.join(__dirname, 'routes.dat'), 'utf-8');
-  const lines= fileContent.split('\n');
-  const graph: Graph = {};
-  for (const line of lines){
-    if(!line.trim()) continue;
+type Edge = {
+  destination: string;
+  weight: number;
+};
 
-    const fields= line.split(',');
-    const sourceId= fields[3];
-    const destId= fields[5];
-    const stops= parseInt(fields[7]);
-    const sourceCoords= airportCoords[sourceId];
-    const destCoords= airportCoords[destId];
+type Graph = Record<string, Edge[]>;
 
-    const distance= haversine(sourceCoords, destCoords);
-    const weight= distance + stops*1000;
-
-    if(!graph[sourceId]){
-      graph[sourceId]=[];
-    }
-    graph[sourceId].push({destination:destId, weight:weight });
-  }
-
-  return graph
-
-}
-
-function dijkistra(graph: Graph, source:string): Record<string, number>{
+export function dijkistras(
+  graph: Graph,
+  source: string,
+): Record<string, number> {
   const distances: Record<string, number> = {};
-  for (const node in graph){
-    distances[node]= Infinity;
+  for (const node in graph) {
+    distances[node] = Infinity;
   }
-  distances[source]=0;
+  distances[source] = 0;
 
-  const queue: string[]=  [source];
-  const visited= new Set<string>();
+  const queue: string[] = [source];
+  const visited = new Set<string>();
 
-  while (queue.length > 0){
-    let smallestIndex=0;
-    for(let i = 1; i<queue.length; i++){
-      if(distances[queue[i]] < distances[queue[smallestIndex]]){
-        smallestIndex= i;
+  while (queue.length > 0) {
+    let smallestIndex = 0;
+    for (let i = 1; i < queue.length; i++) {
+      if (distances[queue[i]] < distances[queue[smallestIndex]]) {
+        smallestIndex = i;
       }
     }
-    const currentNode= queue[smallestIndex];
-    queue.splice(smallestIndex,1);
+    const currentNode = queue[smallestIndex];
+    queue.splice(smallestIndex, 1);
 
-    if(visited.has(currentNode)) continue;
+    if (visited.has(currentNode)) continue;
     visited.add(currentNode);
 
-    const nextTo= graph[currentNode] || [];
-    for(const edge of nextTo) {
-      const newDist= distances[currentNode]+ edge.weight;
-      if(newDist < distances[edge.destination]){
-        distances[edge.destination]= newDist;
+    const nextTo = graph[currentNode] || [];
+    for (const edge of nextTo) {
+      const newDist = distances[currentNode] + edge.weight;
+      if (newDist < distances[edge.destination]) {
+        distances[edge.destination] = newDist;
         queue.push(edge.destination);
       }
     }
   }
 
-  return distances
+  return distances;
+}
+
+let cachedGraph: Graph | null = null;
+
+export async function getGraph(): Promise<Graph> {
+  if (cachedGraph) return cachedGraph;
+
+  const graph: Graph = {};
+  const pageSize = 1000;
+  let from = 0;
+  let failed = false;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("graph_edges")
+      .select("*")
+      .order("source_id")
+      .order("destination_id")
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      failed = true;
+      break;
+    }
+    if (!data || data.length === 0) break;
+
+    for (const row of data) {
+      if (!graph[row.source_id]) {
+        graph[row.source_id] = [];
+      }
+      graph[row.source_id].push({ destination: row.destination_id, weight: row.weight });
+    }
+
+    if (data.length < pageSize) break;
+    from += pageSize;
   }
 
-  const airportCoords= buildAirportLookup();
-  const graph= buildGraph(airportCoords);
-  const distances= dijkistra(graph, "2968");
-  console.log(distances)
+  if (!failed) cachedGraph = graph;
+  return graph;
+}
