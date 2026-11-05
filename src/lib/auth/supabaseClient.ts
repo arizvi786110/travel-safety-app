@@ -2,7 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import * as aesjs from "aes-js";
 import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
 import "react-native-get-random-values";
+
+const isServer = typeof window === "undefined";
+const useSecureStore = Platform.OS !== "web";
 
 class LargeSecureStore {
   private async _encrypt(key: string, value: string) {
@@ -59,9 +63,9 @@ if (!supabasePublishableKey)
 
 export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
-    storage: new LargeSecureStore(),
-    autoRefreshToken: true,
-    persistSession: true,
+    ...(useSecureStore ? { storage: new LargeSecureStore() } : {}),
+    autoRefreshToken: !isServer,
+    persistSession: !isServer,
     detectSessionInUrl: false,
   },
 });
