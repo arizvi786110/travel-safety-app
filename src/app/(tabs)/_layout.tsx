@@ -1,72 +1,50 @@
-import { supabase } from "@/lib/auth/supabaseClient";
-import { Stack, useRouter, useSegments } from "expo-router";
-import { useEffect, useState } from "react";
+import { colors } from "@/theme";
+import {
+  CormorantGaramond_500Medium,
+  CormorantGaramond_600SemiBold,
+} from "@expo-google-fonts/cormorant-garamond";
+import { Ionicons } from "@expo/vector-icons";
+import { useFonts } from "expo-font";
+import { Tabs } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 
-const PUBLIC_ROUTES = ["terms", "privacy-policy"];
+type IconName = keyof typeof Ionicons.glyphMap;
 
-export default function RootLayout() {
-  const [session, setSession] = useState<any>(undefined);
-  const router = useRouter();
-  const segments = useSegments();
+function tabIcon(active: IconName, inactive: IconName) {
+  return ({ color, focused, size }: { color: string; focused: boolean; size: number }) => (
+    <Ionicons name={focused ? active : inactive} size={size} color={color} />
+  );
+}
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
+export default function TabsLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    CormorantGaramond_500Medium,
+    CormorantGaramond_600SemiBold,
+  });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-      },
-    );
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (session === undefined) return;
-
-    const first = segments[0] as string | undefined;
-    const inAuthGroup = first === "(auth)";
-    const onPublicRoute = !!first && PUBLIC_ROUTES.includes(first);
-
-    if (!session && !inAuthGroup && !onPublicRoute) {
-      router.replace("/sign-in");
-    } else if (session && inAuthGroup) {
-      router.replace("/");
-    }
-  }, [session, segments]);
-
-  if (session === undefined) {
-    return null;
-  }
+  if (!fontsLoaded && !fontError) return null;
 
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="location"
-        options={{ title: "Check a Destination" }}
-      />
-      <Stack.Screen
-        name="flight-planner"
-        options={{ title: "Flight Planner" }}
-      />
-      <Stack.Screen name="My-itinerary" options={{ title: "Plan Your Trip" }} />
-      <Stack.Screen
-        name="user-saved-itineraries"
-        options={{ title: "Saved Itineraries" }}
-      />
-      <Stack.Screen name="userSettings" options={{ title: "Settings" }} />
-      <Stack.Screen name="chatbot" options={{ title: "Assistant" }} />
-      <Stack.Screen name="terms" options={{ title: "Terms & Conditions" }} />
-      <Stack.Screen
-        name="privacy-policy"
-        options={{ title: "Privacy Policy" }}
-      />
-    </Stack>
+    <>
+      <StatusBar style="light" />
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          sceneStyle: { backgroundColor: colors.background },
+          tabBarActiveTintColor: colors.accentSoft,
+          tabBarInactiveTintColor: colors.textFaint,
+          tabBarStyle: {
+            backgroundColor: colors.background,
+            borderTopColor: colors.glassBorder,
+          },
+          tabBarLabelStyle: { fontSize: 11 },
+        }}
+      >
+        <Tabs.Screen name="index" options={{ title: "Home", tabBarIcon: tabIcon("home", "home-outline") }} />
+        <Tabs.Screen name="explore" options={{ title: "Explore", tabBarIcon: tabIcon("compass", "compass-outline") }} />
+        <Tabs.Screen name="favourites" options={{ title: "Favourites", tabBarIcon: tabIcon("heart", "heart-outline") }} />
+        <Tabs.Screen name="profile" options={{ title: "Profile", tabBarIcon: tabIcon("person", "person-outline") }} />
+      </Tabs>
+    </>
   );
 }

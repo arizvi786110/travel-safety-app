@@ -1,13 +1,16 @@
+import { verifySession } from "@/lib/auth/verifySession";
 import { supabase } from "@/lib/auth/supabase";
+import { json, serverError } from "@/lib/http";
 
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const city = url.searchParams.get("city");
+  const { user, error } = await verifySession(
+    request.headers.get("Authorization") ?? undefined,
+  );
+  if (!user) return json({ error }, 401);
 
-  if (!city) {
-    return new Response(JSON.stringify({ error: "Missing city" }), {
-      status: 400,
-    });
+  const city = new URL(request.url).searchParams.get("city")?.trim();
+  if (!city || city.length > 100) {
+    return json({ error: "Missing city" }, 400);
   }
 
   const { data: location, error: locationError } = await supabase
@@ -17,9 +20,7 @@ export async function GET(request: Request) {
     .single();
 
   if (locationError || !location) {
-    return new Response(JSON.stringify({ error: "Location not found" }), {
-      status: 404,
-    });
+    return json({ error: "Location not found" }, 404);
   }
-  return new Response(JSON.stringify({ location }), { status: 200 });
+  return json({ location }, 200);
 }

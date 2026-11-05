@@ -2,7 +2,7 @@ import { supabase } from "@/lib/auth/supabase";
 import { verifySession } from "@/lib/auth/verifySession";
 
 const DAILY_LIMIT_PER_USER = 5;
-const MONTHLY_CAP = 200; // stay under the free plan's 250 (lower it while testing by hand)
+const MONTHLY_CAP = 200; 
 const CACHE_HOURS = 6;
 const CURRENCY = "GBP";
 const MAX_OFFERS = 10;
@@ -69,7 +69,6 @@ export async function GET(request: Request) {
   const { user, error } = await verifySession(request.headers.get("Authorization") ?? undefined);
   if (!user) return json({ error }, 401);
 
-  // Kill switch: set FLIGHT_PRICES_ENABLED=false in .env to turn live prices off
   if (process.env.FLIGHT_PRICES_ENABLED === "false") {
     return json({ error: "Live prices are switched off right now." }, 503);
   }
@@ -100,7 +99,6 @@ export async function GET(request: Request) {
   const toIds = toAirports.map((a) => a.iata);
   const cacheKey = `${fromIds.join(",")}>${toIds.join(",")}|${date}|${CURRENCY}`;
 
-  // Cache hits cost nothing and don't count towards any limit
   const { data: cached } = await supabase
     .from("flight_price_cache")
     .select("payload, fetched_at")
@@ -126,7 +124,6 @@ export async function GET(request: Request) {
     return json({ error: "Live prices are paused for this month. Please check back soon." }, 503);
   }
 
-  // Log before calling so parallel requests can't overshoot the cap
   await supabase.from("flight_search_log").insert({ user_id: user.id });
 
   const params = new URLSearchParams({
@@ -134,7 +131,7 @@ export async function GET(request: Request) {
     departure_id: fromIds.join(","),
     arrival_id: toIds.join(","),
     outbound_date: date,
-    type: "2", // one way
+    type: "2", 
     currency: CURRENCY,
     hl: "en",
     gl: "uk",

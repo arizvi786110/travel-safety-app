@@ -1,118 +1,84 @@
 import { supabase } from "@/lib/auth/supabase";
 import { verifySession } from "@/lib/auth/verifySession";
+import { json, serverError } from "@/lib/http";
 
-export async function GET(request: Request) {
-  const authHeader = request.headers.get("Authorization") ?? undefined;
-  const { user, error } = await verifySession(authHeader);
-
-  if (!user) {
-    return new Response(JSON.stringify({ error }), { status: 401 });
+async function readBody(request: Request) {
+  try {
+    return await request.json();
+  } catch {
+    return null;
   }
+}
+
+//every handler has verifySession
+export async function GET(request: Request) {
+  const { user, error } = await verifySession(request.headers.get("Authorization") ?? undefined);
+  if (!user) return json({ error }, 401);
 
   const { data: favourites, error: fetchError } = await supabase
     .from("favourites")
     .select("*, location(location_id, city, country)")
     .eq("user_id", user.id);
+  if (fetchError) return serverError("favourites GET", fetchError);
+  if (!favourites || favourites.length === 0) return json({ data: [] });
 
-  if (fetchError) {
-    return new Response(JSON.stringify({ error: fetchError.message }), {
-      status: 500,
-    });
-  }
-
-  if (!favourites || favourites.length === 0) {
-    return new Response(JSON.stringify({ data: [] }), { status: 200 });
-  }
-
-  const countries = favourites
-    .map((f: any) => f.location?.country)
-    .filter(Boolean);
-  const { data: themes } = await supabase
+  const countries = favourites.map((f: any) => f.location?.country).filter(Boolean);
+  const { data: themes, error: themeError } = await supabase
     .from("country_theme")
-    .select("*")
+    .select("country, theme")
     .in("country", countries);
+  // Themes are cosmetic: fall back to the default image instead of failing the whole list
+  if (themeError) console.error("favourites themes:", themeError.message);
 
   const themeMap: Record<string, string> = {};
   (themes ?? []).forEach((t: any) => {
     themeMap[t.country] = t.theme;
   });
 
-  const enriched = favourites.map((f: any) => ({
-    ...f,
-    theme: themeMap[f.location?.country] ?? "city",
-  }));
-
-  return new Response(JSON.stringify({ data: enriched }), { status: 200 });
+  return json({
+    data: favourites.map((f: any) => ({
+      ...f,
+      theme: themeMap[f.location?.country] ?? "city",
+    })),
+  });
 }
 
 export async function POST(request: Request) {
-  const authHeader = request.headers.get("Authorization") ?? undefined;
-  const { user, error } = await verifySession(authHeader);
+  const { user, error } = await verifySession(request.headers.get("Authorization") ?? undefined);
+  if (!user) return json({ error }, 401);
 
-  if (!user) {
-    return new Response(JSON.stringify({ error }), { status: 401 });
-  }
-
-  const body = await request.json();
-  const { location_id, season } = body;
-
-  if (!location_id || !season) {
-    return new Response(
-      JSON.stringify({ error: "Missing location or season" }),
-      { status: 400 },
-    );
+  const body = await readBody(request);
+  const location_id = body?.location_id;
+  const season = body?.season;
+  if (!location_id || typeof season !== "string" || season.length === 0 || season.length > 20) {
+    return json({ error: "Missing or invalid location or season" }, 400);
   }
 
   const { data, error: insertError } = await supabase
     .from("favourites")
-    .insert({
-      user_id: user.id,
-      fav_locationid: location_id,
-      season,
-      created_at: new Date(),
-    })
+    .insert({ user_id: user.id, fav_locationid: location_id, season, created_at: new Date() })
     .select();
-
-  if (insertError) {
-    return new Response(JSON.stringify({ error: insertError.message }), {
-      status: 500,
-    });
-  }
-
-  return new Response(JSON.stringify({ data }), { status: 200 });
+  if (insertError) return serverError("favourites POST", insertError);
+  return json({ data });
 }
 
 export async function DELETE(request: Request) {
-  const authHeader = request.headers.get("Authorization") ?? undefined;
-  const { user, error } = await verifySession(authHeader);
+  const { user, error } = await verifySession(request.headers.get("Authorization") ?? undefined);
+  if (!user) return json({ error }, 401);
 
-  if (!user) {
-    return new Response(JSON.stringify({ error }), { status: 401 });
-  }
-
-  let body: any;
-  try {
-    body = await request.json();
-  } catch {
-    return new Response(JSON.stringify({ error: "Invalid request body" }), { status: 400 });
-  }
-
-  const { location_id, season } = body ?? {};
-  if (!location_id) {
-    return new Response(JSON.stringify({ error: "Missing location_id" }), { status: 400 });
-  }
+  const body = await readBody(request);
+  const location_id = body?.location_id;
+  const season = body?.season;
+  if (!location_id) return json({ error: "Missing location_id" }, 400);
 
   let query = supabase
     .from("favourites")
     .delete()
     .eq("user_id", user.id)
     .eq("fav_locationid", location_id);
-  if (season) query = query.eq("season", season);
+  if (typeof season === "string" && season) query = query.eq("season", season);
 
   const { error: deleteError } = await query;
-  if (deleteError) {
-    return new Response(JSON.stringify({ error: deleteError.message }), { status: 500 });
-  }
-
-  return new Response(JSON.stringify({ success: true }), { status: 200 });
+  if (deleteError) return serverError("favourites DELETE", deleteError);
+  return json({ success: true });
 }

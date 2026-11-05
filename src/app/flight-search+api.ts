@@ -1,15 +1,30 @@
 import { supabase } from "@/lib/auth/supabase";
 import { dijkistras, getGraph } from "@/lib/processing/dijkistra";
+import { verifySession } from "@/lib/auth/verifySession";
+import { rateLimited } from "@/lib/http";
+
+function escapeLike(value: string) {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
 
 async function findAirports(city: string) {
   const { data } = await supabase
     .from("airport_lookup")
     .select("*")
-    .ilike("city", city);
+    .ilike("city", escapeLike(city));
   return data ?? [];
 }
 
 export async function GET(request: Request) {
+    const { user, error: authError } = await verifySession(
+    request.headers.get("Authorization") ?? undefined,
+  );
+  if (!user) {
+    return new Response(JSON.stringify({ error: authError }), { status: 401 });
+  }
+  if (rateLimited(`flight-search:${user.id}`, 30)) {
+    return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
+  }
   const url = new URL(request.url);
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
@@ -18,6 +33,9 @@ export async function GET(request: Request) {
     return new Response(JSON.stringify({ error: "Missing from or to city" }), {
       status: 400,
     });
+  }
+  if (from.length > 100 || to.length > 100) {
+    return new Response(JSON.stringify({ error: "City name too long" }), { status: 400 });
   }
 
   try {

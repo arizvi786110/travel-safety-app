@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/auth/supabase";
+import { verifySession } from "@/lib/auth/verifySession";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -57,6 +58,10 @@ async function findCountry(iso3: string | null, iso2: string | null, names: stri
 }
 
 export async function GET(request: Request) {
+    const { user, error: authError } = await verifySession(
+        request.headers.get("Authorization") ?? undefined,
+    );
+  if (!user) return json({ error: authError }, 401);
   const url = new URL(request.url);
   const iso3 = url.searchParams.get("iso3");
   const iso2 = url.searchParams.get("iso2");
@@ -83,7 +88,7 @@ export async function GET(request: Request) {
   );
 
   if (citiesError) {
-    console.error("country-info: cities query failed", citiesError);
+    console.error("country-info: cities query failed", citiesError.message);
   } else if (!cityRows || cityRows.length === 0) {
     console.log("country-info: no airports matched", candidates);
   }

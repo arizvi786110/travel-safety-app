@@ -2,7 +2,7 @@ import { supabase } from "@/lib/auth/supabase";
 
 export async function verifySession(authHeader: string | undefined){
     if(!authHeader){
-        return {user: null, error: "Noa authentication header provided"}
+        return {user: null, error: "No authentication header provided"}
     }
 
     const token= authHeader.replace("Bearer ", "");

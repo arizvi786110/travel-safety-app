@@ -8,18 +8,29 @@ export async function getLocationInfo(city: string, authToken?: string) {
 
   if (response.status === 200) return await response.json();
   if (response.status === 400) return { error: "Missing city name" };
-  if (response.status === 401) return { error: "The user needs to be signed in to look up a new destination" };
-  if (response.status === 404) return { error: `No information found for "${city}"` };
+  if (response.status === 401)
+    return {
+      error: "The user needs to be signed in to look up a new destination",
+    };
+  if (response.status === 404)
+    return { error: `No information found for "${city}"` };
   return { error: "Something went wrong fetching location info" };
 }
 
-export async function findFlightRoute(source: string, destination: string) {
+export async function findFlightRoute(
+  source: string,
+  destination: string,
+  authToken?: string,
+) {
   const response = await fetch(
     `${API_URL}/flight-search?from=${encodeURIComponent(source)}&to=${encodeURIComponent(destination)}`,
+    { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
   );
-
+  if (response.status === 401)
+    return { error: "The user needs to be signed in to search flights" };
   if (response.status === 200) return await response.json();
-  if (response.status === 400) return { error: "Missing departure or arrival city" };
+  if (response.status === 400)
+    return { error: "Missing departure or arrival city" };
   if (response.status === 404) {
     const body = await response.json().catch(() => null);
     return { error: body?.error ?? "No airport found for one of those cities" };
@@ -42,7 +53,8 @@ export async function manageFavourites(
   if (action === "view") {
     const response = await fetch(url, { headers });
     if (response.status === 200) return await response.json();
-    if (response.status === 401) return { error: "You need to be logged in to view favourites" };
+    if (response.status === 401)
+      return { error: "You need to be logged in to view favourites" };
     return { error: "Something went wrong fetching favourites" };
   }
 
@@ -53,7 +65,8 @@ export async function manageFavourites(
       body: JSON.stringify({ location_id, season: season ?? "now" }),
     });
     if (response.status === 200) return await response.json();
-    if (response.status === 401) return { error: "You need to be logged in to add favourites" };
+    if (response.status === 401)
+      return { error: "You need to be logged in to add favourites" };
     if (response.status === 400) return { error: "Missing location or season" };
     return { error: "Something went wrong adding that favourite" };
   }
@@ -65,7 +78,8 @@ export async function manageFavourites(
       body: JSON.stringify({ location_id, season }),
     });
     if (response.status === 200) return await response.json();
-    if (response.status === 401) return { error: "You need to be logged in to remove a favourite" };
+    if (response.status === 401)
+      return { error: "You need to be logged in to remove a favourite" };
     if (response.status === 400) return { error: "Missing location" };
     return { error: "Something went wrong removing that favourite" };
   }
@@ -73,11 +87,16 @@ export async function manageFavourites(
   return { error: "Unknown favourites action" };
 }
 
-export async function getGoingAnywaysInfo(city: string) {
-  const response = await fetch(`${API_URL}/ImGoingAnyway?city=${encodeURIComponent(city)}`);
-
+export async function getGoingAnywaysInfo(city: string, authToken?: string) {
+  const response = await fetch(
+    `${API_URL}/ImGoingAnyway?city=${encodeURIComponent(city)}`,
+    { headers: authToken ? { Authorization: `Bearer ${authToken}` } : {} },
+  );
+  if (response.status === 401)
+    return { error: "The user needs to be signed in" };
   if (response.status === 200) return await response.json();
   if (response.status === 400) return { error: "Missing city name" };
-  if (response.status === 404) return { error: `No information found for "${city}"` };
+  if (response.status === 404)
+    return { error: `No information found for "${city}"` };
   return { error: "Something went wrong fetching location info" };
 }

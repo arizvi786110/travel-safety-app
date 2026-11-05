@@ -20,6 +20,8 @@ export const llm = new ChatGroq({
   model: "openai/gpt-oss-20b",
   temperature: 0.2,
   apiKey: process.env.GROQ_API_KEY,
+  maxTokens: 700,
+  maxRetries: 1,
 });
 
 export type ChatMessage = {
@@ -104,7 +106,6 @@ async function routeQuery(state: AgentState): Promise<AgentState> {
     const prompt = buildRoutingPrompt(state.query, conversationContext);
     const response = await llm.invoke(prompt);
     let toolChoice = normalizeContent(response.content).toLowerCase();
-    console.log("Raw routing response:", JSON.stringify(toolChoice));
 
     const validTools = [
       "location_info",
@@ -164,7 +165,7 @@ async function callTool(state: AgentState): Promise<AgentState> {
       if (!source || !destination) {
         return { ...state, error: "Missing flight source or destination" };
       }
-      const result = await findFlightRoute(source, destination);
+      const result = await findFlightRoute(source, destination, state.authToken ?? undefined);
       return { ...state, rawResult: result };
     }
         if (state.toolUsed === "favourites") {
@@ -223,7 +224,7 @@ async function callTool(state: AgentState): Promise<AgentState> {
       if (!city) {
         return { ...state, error: "No destination was provided" };
       }
-      const result = await getGoingAnywaysInfo(city);
+      const result = await getGoingAnywaysInfo(city, state.authToken ?? undefined);
       return { ...state, rawResult: result };
     }
     if (state.toolUsed === "general") {
@@ -266,7 +267,7 @@ async function formatResponse(state: AgentState): Promise<AgentState> {
       conversationContext,
     );
     const response = await llm.invoke(prompt);
-    return { ...state, formattedResult: String(response.content).trim() };
+    return { ...state, formattedResult: normalizeContent(response.content) };
   } catch (error) {
     console.error("Response formatting error:", error);
     return {

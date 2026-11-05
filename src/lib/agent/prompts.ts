@@ -352,7 +352,7 @@ RESULT:
 ${JSON.stringify(result, null, 2)}
 
 
-Your job is to turn the result into a natural response for the user.
+Your job is to turn the result into a natural response for the user. no data, don’t invent specifics
 
 
 RESPONSE RULES:

@@ -1,232 +1,198 @@
-import { supabase } from "@/lib/auth/supabaseClient";
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { Body, GlassCard, Heading, HeroImage } from "@/components/ui";
+import { heroImages, themeImages, type ThemeName } from "@/lib/images";
+import { colors, fonts, radius, spacing } from "@/theme";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { type Href, useRouter } from "expo-router";
 import {
-  Alert,
   ImageBackground,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const themeImages: Record<string, any> = {
-  city: require("@/assets/images/themes/city.jpg"),
-  beach: require("@/assets/images/themes/beach.jpg"),
-  mountainous: require("@/assets/images/themes/mountainous.jpg"),
-  desert: require("@/assets/images/themes/desert.jpg"),
-  forest: require("@/assets/images/themes/forest.jpg"),
-  historic: require("@/assets/images/themes/historic.jpg"),
-};
+type IconName = keyof typeof Ionicons.glyphMap;
+
+const QUICK_ACTIONS: { label: string; icon: IconName; route: Href }[] = [
+  { label: "Check a Destination", icon: "location-outline", route: "/explore" },
+  {
+    label: "Flight Planner",
+    icon: "airplane-outline",
+    route: "/flight-planner",
+  },
+  { label: "Chatbot", icon: "chatbubble-ellipses-outline", route: "/chatbot" },
+  {
+    label: "Itineraries",
+    icon: "calendar-outline",
+    route: "/user-saved-itineraries",
+  },
+];
+
+const POPULAR: { city: string; country: string; theme: ThemeName }[] = [
+  { city: "Istanbul", country: "Türkiye", theme: "historic" },
+  { city: "Dubai", country: "UAE", theme: "city" },
+  { city: "Cairo", country: "Egypt", theme: "desert" },
+  { city: "Phuket", country: "Thailand", theme: "beach" },
+];
 
 export default function Home() {
   const router = useRouter();
-  const [favourites, setFavourites] = useState<any[]>([]);
-
-  useFocusEffect(
-    useCallback(() => {
-      async function fetchFavourites() {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-        const token = session?.access_token;
-
-        const response = await fetch(
-          `${process.env.EXPO_PUBLIC_API_URL}/favourites-api`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        const result = await response.json();
-        setFavourites(result.data ?? []);
-      }
-      fetchFavourites();
-    }, []),
-  );
-
-  function confirmDelete(fav: any) {
-    Alert.alert(
-      "Remove favourite",
-      `Remove ${fav.location?.city} from your favourites?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: () => deleteFavourite(fav),
-        },
-      ],
-    );
-  }
-
-  async function deleteFavourite(fav: any) {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const token = session?.access_token;
-
-    const response = await fetch(
-      `${process.env.EXPO_PUBLIC_API_URL}/favourites-api`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          location_id: fav.fav_locationid,
-          season: fav.season,
-        }),
-      },
-    );
-
-    if (response.ok) {
-      setFavourites((prev) =>
-        prev.filter(
-          (f) =>
-            !(
-              f.fav_locationid === fav.fav_locationid && f.season === fav.season
-            ),
-        ),
-      );
-    } else {
-      Alert.alert("Something went wrong removing that favourite.");
-    }
-  }
+  const insets = useSafeAreaInsets();
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Travel Safety App</Text>
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/location")}
-      >
-        <Text style={styles.buttonText}>Check a Destination</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/flight-planner")}
-      >
-        <Text style={styles.buttonText}>Flight Planner</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/user-saved-itineraries")}
-      >
-        <Text style={styles.buttonText}>chatbot</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/chatbot")}
-      >
-        <Text style={styles.buttonText}>Talk to your own chatbot</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/userSettings")}
-      >
-        <Text style={styles.buttonText}>Settings</Text>
-      </TouchableOpacity>
-
-      <Text style={styles.sectionTitle}>Your Favourites</Text>
-
-      {favourites.length === 0 ? (
-        <Text style={styles.emptyText}>
-          No favourites yet — go check a destination!
-        </Text>
-      ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.cardRow}
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={{ paddingBottom: spacing.xl }}
+      showsVerticalScrollIndicator={false}
+    >
+      <HeroImage source={heroImages.home} height={470 + insets.top}>
+        <View
+          style={[styles.heroInner, { paddingTop: insets.top + spacing.md }]}
         >
-          {favourites.map((fav) => (
-            <TouchableOpacity
-              key={`${fav.fav_locationid}-${fav.season}`}
-              onPress={() =>
-                router.push({
-                  pathname: "/location",
-                  params: { city: fav.location?.city },
-                })
-              }
+          <Text style={styles.wordmark}>SafePath</Text>
+
+          <View>
+            <Heading size={46} style={{ lineHeight: 50 }}>
+              Explore{"\n"}wisely.
+            </Heading>
+            <Body muted style={{ marginTop: spacing.sm }}>
+              Safety insights from recent news, smarter routes, better journeys.
+            </Body>
+
+            <Pressable
+              style={styles.search}
+              onPress={() => router.push("/explore")}
             >
-              <ImageBackground
-                source={themeImages[fav.theme] ?? themeImages.city}
-                style={styles.card}
-                imageStyle={styles.cardImage}
-              >
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => confirmDelete(fav)}
-                >
-                  <Text style={styles.deleteText}>✕</Text>
-                </TouchableOpacity>
-                <View style={styles.cardOverlay}>
-                  <Text style={styles.cardText}>
-                    {fav.location?.city}, {fav.location?.country}
-                  </Text>
-                </View>
-              </ImageBackground>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      )}
+              <Ionicons name="search" size={20} color={colors.textMuted} />
+              <Text style={styles.searchText}>Search a destination...</Text>
+              <Ionicons
+                name="arrow-forward"
+                size={18}
+                color={colors.textMuted}
+              />
+            </Pressable>
+          </View>
+        </View>
+      </HeroImage>
+
+      <View style={styles.actions}>
+        {QUICK_ACTIONS.map((action) => (
+          <Pressable
+            key={action.label}
+            style={styles.actionWrap}
+            onPress={() => router.push(action.route)}
+          >
+            <GlassCard style={styles.action}>
+              <Ionicons
+                name={action.icon}
+                size={26}
+                color={colors.accentSoft}
+              />
+              <Text style={styles.actionLabel} numberOfLines={2}>
+                {action.label}
+              </Text>
+            </GlassCard>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.sectionHeader}>
+        <Heading size={24}>Popular destinations</Heading>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.popularRow}
+      >
+        {POPULAR.map((place) => (
+          <Pressable
+            key={place.city}
+            onPress={() =>
+              router.push({
+                pathname: "/explore",
+                params: { city: place.city },
+              })
+            }
+          >
+            <ImageBackground
+              source={themeImages[place.theme]}
+              style={styles.card}
+              imageStyle={{ borderRadius: radius.md }}
+            >
+              <LinearGradient
+                colors={["transparent", colors.overlayBottom]}
+                style={[StyleSheet.absoluteFill, { borderRadius: radius.md }]}
+              />
+              <Text style={styles.cardCity}>{place.city}</Text>
+              <Text style={styles.cardCountry}>{place.country}</Text>
+            </ImageBackground>
+          </Pressable>
+        ))}
+      </ScrollView>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24 },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 24,
+  screen: { flex: 1, backgroundColor: colors.background },
+  heroInner: {
+    flex: 1,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+  },
+  wordmark: {
+    fontFamily: fonts.headingBold,
+    fontSize: 34,
+    color: colors.text,
     textAlign: "center",
+    letterSpacing: 1,
   },
-  button: {
-    backgroundColor: "#2089dc",
-    borderRadius: 8,
-    padding: 14,
+  search: {
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 12,
+    gap: spacing.sm,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderColor: colors.glassBorder,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
   },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginTop: 16,
-    marginBottom: 12,
+  searchText: { flex: 1, color: colors.textMuted, fontSize: 15 },
+  actions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.md,
   },
-  emptyText: { color: "#6b7280", fontStyle: "italic" },
-  cardRow: { marginBottom: 24 },
-  card: {
-    width: 220,
-    height: 140,
-    borderRadius: 12,
-    marginRight: 12,
-    justifyContent: "flex-end",
-  },
-  cardImage: { borderRadius: 12 },
-  deleteButton: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "rgba(0,0,0,0.55)",
+  actionWrap: { flex: 1 },
+  action: {
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
+    minHeight: 96,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
   },
-  deleteText: { color: "#fff", fontSize: 14, fontWeight: "700" },
-  cardOverlay: {
-    backgroundColor: "rgba(0,0,0,0.4)",
+  actionLabel: { color: colors.text, fontSize: 11, textAlign: "center" },
+  sectionHeader: {
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  popularRow: { paddingHorizontal: spacing.lg, gap: 12 },
+  card: {
+    width: 150,
+    height: 190,
+    justifyContent: "flex-end",
     padding: 12,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
   },
-  cardText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  cardCity: { fontFamily: fonts.heading, color: colors.text, fontSize: 22 },
+  cardCountry: { color: colors.textMuted, fontSize: 12 },
 });

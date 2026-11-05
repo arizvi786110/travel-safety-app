@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/auth/supabase";
 import { verifySession } from "@/lib/auth/verifySession";
+import { serverError } from "@/lib/http";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
-  if (fetchError) return json({ error: fetchError.message }, 500);
+  if (fetchError) return serverError("saved-itins GET", fetchError);
   return json({ data }, 200);
 }
 
@@ -59,7 +60,7 @@ export async function POST(request: Request) {
     .insert({ user_id: user.id, location_id, schedule, created_at: new Date() })
     .select();
 
-  if (insertError) return json({ error: insertError.message }, 500);
+  if (insertError) return serverError("saved-itins POST", insertError);
   return json({ data }, 200);
 }
 
@@ -79,6 +80,6 @@ export async function DELETE(request: Request) {
     .eq("user_id", user.id)
     .eq("itinerary_id", itinerary_id);
 
-  if (deleteError) return json({ error: deleteError.message }, 500);
+  if (deleteError) return serverError("saved-itins DELETE", deleteError);
   return json({ success: true }, 200);
 }

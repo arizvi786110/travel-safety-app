@@ -1,16 +1,20 @@
+import { authFetch } from "@/lib/auth/authFetch";
 import { supabase } from "@/lib/auth/supabaseClient";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { InlineError } from "@/components/ErrorScreen";
 
 type ScheduleEntry = {
   start: number;
@@ -199,8 +203,8 @@ const typeColors: Record<string, string> = {
   getReady: "#fbbf24",
   rest: "#a78bfa",
   meal: "#fb923c",
-  activity: "#2089dc",
-  free: "#e5e7eb",
+  activity: "#e8c9d2",
+  free: "#ffffff",
 };
 const typeLabels: Record<string, string> = {
   getReady: "Get Ready / Sleep",
@@ -209,6 +213,8 @@ const typeLabels: Record<string, string> = {
   activity: "Activity",
   free: "Free",
 };
+
+const SERIF = "CormorantGaramond_600SemiBold";
 
 function HourPicker({
   label,
@@ -222,12 +228,19 @@ function HourPicker({
   return (
     <View style={styles.timeRow}>
       <Text style={styles.label}>{label}</Text>
-      <ScrollView horizontal style={styles.hourScroll}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentOffset={{ x: Math.max(0, value - 1) * 70, y: 0 }}
+      >
         {HOURS.map((h) => (
           <TouchableOpacity
             key={h}
             style={[styles.hourChip, value === h && styles.hourChipSelected]}
             onPress={() => onChange(h)}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: value === h }}
+            accessibilityLabel={`${label} ${h}:00`}
           >
             <Text
               style={value === h ? styles.hourTextSelected : styles.hourText}
@@ -251,6 +264,22 @@ const STEPS = [
   "preview",
 ] as const;
 type Step = (typeof STEPS)[number];
+
+const STEP_META: Record<Step, { title: string; sub: string }> = {
+  basics: {
+    title: "Your trip",
+    sub: "How long are you going, and what do you enjoy?",
+  },
+  sleep: { title: "Sleep", sub: "When do you go to bed and wake up?" },
+  ready: { title: "Getting ready", sub: "Time to get up and out the door." },
+  lunch: { title: "Lunch", sub: "When do you like to eat lunch?" },
+  dinner: { title: "Dinner", sub: "And dinner?" },
+  rest: { title: "Rest break", sub: "A breather in the afternoon." },
+  preview: {
+    title: "Your timetable",
+    sub: "Tap a free slot to add an activity.",
+  },
+};
 
 export default function ItineraryBuilder() {
   const params = useLocalSearchParams();
@@ -283,6 +312,9 @@ export default function ItineraryBuilder() {
   );
   const [placeOptions, setPlaceOptions] = useState<any[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
+  const [placesError, setPlacesError] = useState<string | null>(null);
+
+  const dayCount = Math.min(7, Math.max(1, parseInt(numDays) || 1));
 
   function toggleCategory(category: string) {
     setCategories((prev) =>
@@ -292,7 +324,42 @@ export default function ItineraryBuilder() {
     );
   }
 
+  // Every step except basics/preview needs an end after its start
+  function stepIsValid(): boolean {
+    const ranges: Partial<Record<Step, [number, number]>> = {
+      sleep: [sleepStart, sleepEnd],
+      ready: [readyStart, readyEnd],
+      lunch: [lunchStart, lunchEnd],
+      dinner: [dinnerStart, dinnerEnd],
+      rest: [restStart, restEnd],
+    };
+    const r = ranges[step];
+    if (r && r[1] <= r[0]) {
+      Alert.alert(
+        "Check your times",
+        "The end time must be after the start time.",
+      );
+      return false;
+    }
+    if (step === "rest") {
+      const blocks = Object.values(ranges)
+        .map((x) => x as [number, number])
+        .sort((a, b) => a[0] - b[0]);
+      for (let i = 1; i < blocks.length; i++) {
+        if (blocks[i][0] < blocks[i - 1][1]) {
+          Alert.alert(
+            "Times overlap",
+            "Two of your blocks (sleep, getting ready, meals, rest) overlap. Go back and adjust them.",
+          );
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
   function goNext() {
+    if (!stepIsValid()) return;
     const index = STEPS.indexOf(step);
     if (step === "rest") generateSchedule();
     if (index < STEPS.length - 1) setStep(STEPS[index + 1]);
@@ -300,10 +367,10 @@ export default function ItineraryBuilder() {
   function goBack() {
     const index = STEPS.indexOf(step);
     if (index > 0) setStep(STEPS[index - 1]);
+    else router.back();
   }
 
   function generateSchedule() {
-    const dayCount = parseInt(numDays) || 1;
     const sleepBlock: ScheduleEntry = {
       start: sleepStart,
       end: sleepEnd,
@@ -330,27 +397,32 @@ export default function ItineraryBuilder() {
     setCurrentDay(0);
   }
 
-  function goToPreviousDay() {
-    setCurrentDay((d) => Math.max(0, d - 1));
-    setEditingBlockIndex(null);
-  }
-  function goToNextDay() {
-    setCurrentDay((d) => Math.min(days.length - 1, d + 1));
-    setEditingBlockIndex(null);
-  }
-
   async function openBlockForPlacing(index: number) {
-    setEditingBlockIndex(index);
-    setLoadingPlaces(true);
-    setPlaceOptions([]);
-
-    const response = await fetch(
+  setEditingBlockIndex(index);
+  setLoadingPlaces(true);
+  setPlacesError(null);
+  setPlaceOptions([]);
+  try {
+    const response = await authFetch(
       `${process.env.EXPO_PUBLIC_API_URL}/itinerary?latitude=${latitude}&longitude=${longitude}&radius=${FIXED_RADIUS}&categories=${categories.join(",")}`,
     );
-    const data = await response.json();
-    setPlaceOptions(data.places?.places ?? []);
-    setLoadingPlaces(false);
+    if (!response.ok) {
+      setPlacesError(
+        response.status === 429
+          ? "Place search is busy right now. Try again in a minute."
+          : response.status === 401
+            ? "Your session has expired. Please sign in again."
+            : "Couldn't load places right now. Try again.",
+      );
+    } else {
+      const data = await response.json();
+      setPlaceOptions(data.places?.places ?? []);
+    }
+  } catch {
+    setPlacesError("Couldn't reach the server. Check your connection and try again.");
   }
+  setLoadingPlaces(false);
+}
 
   function placeActivity(place: any, blockIndex: number) {
     const block = days[currentDay][blockIndex];
@@ -364,7 +436,7 @@ export default function ItineraryBuilder() {
     });
 
     if (!result.success) {
-      alert(result.error);
+      Alert.alert("Can't fit that in", result.error);
       return;
     }
 
@@ -398,333 +470,597 @@ export default function ItineraryBuilder() {
     }
 
     setSaving(true);
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    const response = await fetch(
-      `${process.env.EXPO_PUBLIC_API_URL}/mysaveditins`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session?.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ location_id: locationId, schedule: days }),
-      },
-    );
-    setSaving(false);
-
-    if (response.ok) {
-      Alert.alert("Itinerary saved", "Find it under Saved Itineraries.", [
+      const response = await fetch(
+        `${process.env.EXPO_PUBLIC_API_URL}/mysaveditins`,
         {
-          text: "OK",
-          onPress: () => router.replace("/user-saved-itineraries"),
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ location_id: locationId, schedule: days }),
         },
-      ]);
-    } else {
+      );
+      setSaving(false);
+
+      if (response.ok) {
+        Alert.alert("Itinerary saved", "Find it under Saved Itineraries.", [
+          {
+            text: "OK",
+            onPress: () => router.replace("/user-saved-itineraries"),
+          },
+        ]);
+      } else {
+        Alert.alert("Something went wrong saving your itinerary.");
+      }
+    } catch {
+      setSaving(false);
       Alert.alert("Something went wrong saving your itinerary.");
     }
   }
 
   const dayEntries = days[currentDay] ?? [];
+  const stepIndex = STEPS.indexOf(step);
+  const meta = STEP_META[step];
+  const editingBlock =
+    editingBlockIndex !== null ? dayEntries[editingBlockIndex] : null;
+
+  function timeStep(
+    start: number,
+    setStart: (h: number) => void,
+    end: number,
+    setEnd: (h: number) => void,
+  ) {
+    return (
+      <View style={styles.card}>
+        <HourPicker label="Starts" value={start} onChange={setStart} />
+        <HourPicker label="Ends" value={end} onChange={setEnd} />
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>
-        Plan Your Trip{params.city ? ` — ${params.city}` : ""}
-      </Text>
+    <View style={styles.root}>
+      <LinearGradient
+        colors={["#2a1f27", "#17151a"]}
+        style={StyleSheet.absoluteFill}
+      />
 
-      {step === "basics" && (
-        <>
-          <Text style={styles.label}>Number of Days</Text>
-          <TextInput
-            value={numDays}
-            onChangeText={setNumDays}
-            keyboardType="numeric"
-            style={styles.input}
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={goBack}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={stepIndex === 0 ? "Go back" : "Previous step"}
+        >
+          <Ionicons name="chevron-back" size={22} color="#fff" />
+        </TouchableOpacity>
+        <View
+          style={styles.progressTrack}
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel={`Step ${stepIndex + 1} of ${STEPS.length}`}
+        >
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${((stepIndex + 1) / STEPS.length) * 100}%` },
+            ]}
           />
-          <Text style={styles.sectionTitle}>Categories</Text>
-          <View style={styles.categoryContainer}>
-            {CATEGORY_OPTIONS.map((category) => (
-              <TouchableOpacity
-                key={category}
-                style={[
-                  styles.categoryChip,
-                  categories.includes(category) && styles.categoryChipSelected,
-                ]}
-                onPress={() => toggleCategory(category)}
-              >
-                <Text
-                  style={
-                    categories.includes(category)
-                      ? styles.categoryTextSelected
-                      : styles.categoryText
-                  }
-                >
-                  {category.replace("_", " ")}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </>
-      )}
+        </View>
+      </View>
 
-      {step === "sleep" && (
-        <>
-          <Text style={styles.sectionTitle}>Sleep</Text>
-          <HourPicker
-            label="Start"
-            value={sleepStart}
-            onChange={setSleepStart}
-          />
-          <HourPicker label="End" value={sleepEnd} onChange={setSleepEnd} />
-        </>
-      )}
-      {step === "ready" && (
-        <>
-          <Text style={styles.sectionTitle}>Get Ready (after waking)</Text>
-          <HourPicker
-            label="Start"
-            value={readyStart}
-            onChange={setReadyStart}
-          />
-          <HourPicker label="End" value={readyEnd} onChange={setReadyEnd} />
-        </>
-      )}
-      {step === "lunch" && (
-        <>
-          <Text style={styles.sectionTitle}>Lunch</Text>
-          <HourPicker
-            label="Start"
-            value={lunchStart}
-            onChange={setLunchStart}
-          />
-          <HourPicker label="End" value={lunchEnd} onChange={setLunchEnd} />
-        </>
-      )}
-      {step === "dinner" && (
-        <>
-          <Text style={styles.sectionTitle}>Dinner</Text>
-          <HourPicker
-            label="Start"
-            value={dinnerStart}
-            onChange={setDinnerStart}
-          />
-          <HourPicker label="End" value={dinnerEnd} onChange={setDinnerEnd} />
-        </>
-      )}
-      {step === "rest" && (
-        <>
-          <Text style={styles.sectionTitle}>Rest Break</Text>
-          <HourPicker label="Start" value={restStart} onChange={setRestStart} />
-          <HourPicker label="End" value={restEnd} onChange={setRestEnd} />
-        </>
-      )}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.kicker}>
+          {params.city ? `${params.city} · ` : ""}Step {stepIndex + 1} of{" "}
+          {STEPS.length}
+        </Text>
+        <Text style={styles.title} accessibilityRole="header">
+          {meta.title}
+        </Text>
+        <Text style={styles.sub}>{meta.sub}</Text>
 
-      {step === "preview" && (
-        <>
-          <View style={styles.dayNav}>
-            <TouchableOpacity
-              onPress={goToPreviousDay}
-              disabled={currentDay === 0}
-            >
-              <Text
-                style={[styles.arrow, currentDay === 0 && styles.arrowDisabled]}
-              >
-                ‹
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.dayTitle}>
-              Day {currentDay + 1} of {days.length}
-            </Text>
-            <TouchableOpacity
-              onPress={goToNextDay}
-              disabled={currentDay === days.length - 1}
-            >
-              <Text
-                style={[
-                  styles.arrow,
-                  currentDay === days.length - 1 && styles.arrowDisabled,
-                ]}
-              >
+        {step === "basics" && (
+          <>
+            <View style={styles.card}>
+              <Text style={styles.label}>Number of days</Text>
+              <View style={styles.stepper}>
                 <TouchableOpacity
-                  style={[
-                    styles.navButton,
-                    { marginTop: 16, alignItems: "center" },
-                  ]}
-                  onPress={saveItinerary}
-                  disabled={saving}
+                  style={styles.stepBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Fewer days"
+                  accessibilityState={{ disabled: dayCount <= 1 }}
+                  onPress={() => setNumDays(String(Math.max(1, dayCount - 1)))}
                 >
-                  <Text style={styles.buttonText}>
-                    {saving ? "Saving..." : "Save Itinerary"}
+                  <Ionicons name="remove" size={22} color="#fff" />
+                </TouchableOpacity>
+                <Text
+                  style={styles.stepValue}
+                  accessibilityLabel={`${dayCount} days`}
+                >
+                  {dayCount}
+                </Text>
+                <TouchableOpacity
+                  style={styles.stepBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="More days"
+                  accessibilityState={{ disabled: dayCount >= 7 }}
+                  onPress={() => setNumDays(String(Math.min(7, dayCount + 1)))}
+                >
+                  <Ionicons name="add" size={22} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.card}>
+              <Text style={styles.label}>What do you enjoy?</Text>
+              <View style={styles.categoryContainer}>
+                {CATEGORY_OPTIONS.map((category) => {
+                  const on = categories.includes(category);
+                  return (
+                    <TouchableOpacity
+                      key={category}
+                      style={[
+                        styles.categoryChip,
+                        on && styles.categoryChipSelected,
+                      ]}
+                      onPress={() => toggleCategory(category)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: on }}
+                      accessibilityLabel={category.replace("_", " ")}
+                    >
+                      <Text
+                        style={
+                          on ? styles.categoryTextSelected : styles.categoryText
+                        }
+                      >
+                        {category.replace("_", " ")}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          </>
+        )}
+
+        {step === "sleep" &&
+          timeStep(sleepStart, setSleepStart, sleepEnd, setSleepEnd)}
+        {step === "ready" &&
+          timeStep(readyStart, setReadyStart, readyEnd, setReadyEnd)}
+        {step === "lunch" &&
+          timeStep(lunchStart, setLunchStart, lunchEnd, setLunchEnd)}
+        {step === "dinner" &&
+          timeStep(dinnerStart, setDinnerStart, dinnerEnd, setDinnerEnd)}
+        {step === "rest" &&
+          timeStep(restStart, setRestStart, restEnd, setRestEnd)}
+
+        {step === "preview" && (
+          <>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ marginBottom: 14 }}
+            >
+              {days.map((_, i) => (
+                <TouchableOpacity
+                  key={i}
+                  style={[
+                    styles.dayChip,
+                    currentDay === i && styles.dayChipSelected,
+                  ]}
+                  onPress={() => {
+                    setCurrentDay(i);
+                    setEditingBlockIndex(null);
+                  }}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: currentDay === i }}
+                  accessibilityLabel={`Day ${i + 1}`}
+                >
+                  <Text
+                    style={
+                      currentDay === i ? styles.dayTextSelected : styles.dayText
+                    }
+                  >
+                    Day {i + 1}
                   </Text>
                 </TouchableOpacity>
-                ›
-              </Text>
-            </TouchableOpacity>
-          </View>
+              ))}
+            </ScrollView>
 
-          {dayEntries.map((entry, index) => (
-            <TouchableOpacity
-              key={index}
-              disabled={entry.type !== "free" && entry.type !== "activity"}
-              onPress={() =>
-                entry.type === "free"
-                  ? openBlockForPlacing(index)
-                  : handleRemoveActivity(index)
-              }
-              style={[
-                styles.timeBlock,
-                {
-                  backgroundColor: typeColors[entry.type],
-                  flex: entry.end - entry.start,
-                },
-              ]}
-            >
-              <Text style={styles.timeBlockText}>
-                {formatTime(entry.start)} - {formatTime(entry.end)} ·{" "}
-                {entry.name ?? typeLabels[entry.type]}
-              </Text>
-              {entry.type === "free" && (
-                <Text style={styles.tapHint}>Tap to add an activity</Text>
-              )}
-              {entry.type === "activity" && (
-                <Text style={styles.tapHint}>Tap to remove</Text>
-              )}
-            </TouchableOpacity>
-          ))}
+            <View style={styles.legend}>
+              {(["getReady", "meal", "rest", "activity"] as const).map((t) => (
+                <View key={t} style={styles.legendItem}>
+                  <View
+                    style={[styles.dot, { backgroundColor: typeColors[t] }]}
+                  />
+                  <Text style={styles.legendText}>
+                    {t === "getReady" ? "Sleep / ready" : typeLabels[t]}
+                  </Text>
+                </View>
+              ))}
+            </View>
 
-          {editingBlockIndex !== null && (
-            <View style={styles.editPanel}>
-              <Text style={styles.sectionTitle}>Nearby Places</Text>
+            {dayEntries.map((entry, index) => {
+              const color = typeColors[entry.type];
+              const height = Math.max(48, (entry.end - entry.start) * 34);
+              const isFree = entry.type === "free";
+              const isActivity = entry.type === "activity";
+              return (
+                <TouchableOpacity
+                  key={index}
+                  activeOpacity={isFree ? 0.6 : 1}
+                  disabled={!isFree}
+                  onPress={() => openBlockForPlacing(index)}
+                  style={[
+                    styles.timeBlock,
+                    { minHeight: height },
+                    isFree
+                      ? styles.freeBlock
+                      : {
+                          backgroundColor: color + (isActivity ? "30" : "22"),
+                          borderLeftColor: color,
+                        },
+                  ]}
+                  accessible
+                  accessibilityRole={isFree ? "button" : "text"}
+                  accessibilityLabel={`${formatTime(entry.start)} to ${formatTime(entry.end)}, ${
+                    isFree ? "free" : (entry.name ?? typeLabels[entry.type])
+                  }`}
+                  accessibilityHint={
+                    isFree ? "Double tap to add an activity" : undefined
+                  }
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.timeText}>
+                      {formatTime(entry.start)} – {formatTime(entry.end)}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.blockName,
+                        isFree && { color: "rgba(255,255,255,0.5)" },
+                      ]}
+                    >
+                      {isFree ? "Free" : (entry.name ?? typeLabels[entry.type])}
+                    </Text>
+                  </View>
+                  {isFree && entry.end - entry.start >= 1 && (
+                    <View style={styles.addPill}>
+                      <Ionicons name="add" size={16} color="#e8c9d2" />
+                      <Text style={styles.addPillText}>Add</Text>
+                    </View>
+                  )}
+                  {isActivity && (
+                    <TouchableOpacity
+                      onPress={() => handleRemoveActivity(index)}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${entry.name ?? "activity"}`}
+                    >
+                      <Ionicons
+                        name="trash-outline"
+                        size={20}
+                        color="#fca5a5"
+                      />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </>
+        )}
+      </ScrollView>
+
+      <View style={styles.footer}>
+        {step !== "preview" ? (
+          <TouchableOpacity
+            style={styles.primary}
+            onPress={goNext}
+            accessibilityRole="button"
+            accessibilityLabel={
+              step === "rest" ? "Build my timetable" : "Next step"
+            }
+          >
+            <Text style={styles.primaryText}>
+              {step === "rest" ? "Build my timetable" : "Next"}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.primary, saving && { opacity: 0.6 }]}
+            onPress={saveItinerary}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel="Save itinerary"
+            accessibilityState={{ disabled: saving, busy: saving }}
+          >
+            <Text style={styles.primaryText}>
+              {saving ? "Saving…" : "Save itinerary"}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <Modal
+        visible={editingBlockIndex !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditingBlockIndex(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.sheet}>
+            <View style={styles.sheetHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sheetTitle} accessibilityRole="header">
+                  Add an activity
+                </Text>
+                {editingBlock && (
+                  <Text style={styles.sub}>
+                    From {formatTime(editingBlock.start)} · about 1.5 hours plus
+                    travel
+                  </Text>
+                )}
+              </View>
+              <TouchableOpacity
+                onPress={() => setEditingBlockIndex(null)}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 420 }}>
               {loadingPlaces ? (
-                <ActivityIndicator />
-              ) : placeOptions.length === 0 ? (
-                <Text>No places found for the selected categories.</Text>
+                <ActivityIndicator
+                  color="#e8c9d2"
+                  style={{ marginVertical: 30 }}
+                  accessibilityLabel="Loading places"
+                />
+              ) : placesError ? (
+                <InlineError
+                  message={placesError}
+                  onRetry={() => editingBlockIndex !== null && openBlockForPlacing(editingBlockIndex)}
+                />
+              ): placeOptions.length === 0 ? (
+                <Text style={styles.empty}>
+                  No places found for the selected categories.
+                </Text>
               ) : (
                 placeOptions.map((place, i) => (
                   <TouchableOpacity
                     key={i}
                     style={styles.placeOption}
-                    onPress={() => placeActivity(place, editingBlockIndex)}
+                    onPress={() =>
+                      editingBlockIndex !== null &&
+                      placeActivity(place, editingBlockIndex)
+                    }
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add ${place.displayName?.text ?? "this place"}`}
                   >
+                    <Ionicons
+                      name="location-outline"
+                      size={18}
+                      color="#e8c9d2"
+                    />
                     <Text style={styles.placeText}>
                       {place.displayName?.text}
                     </Text>
+                    <Ionicons
+                      name="add-circle-outline"
+                      size={22}
+                      color="rgba(255,255,255,0.5)"
+                    />
                   </TouchableOpacity>
                 ))
               )}
-            </View>
-          )}
-        </>
-      )}
-
-      <View style={styles.navRow}>
-        {step !== "basics" && (
-          <TouchableOpacity style={styles.navButton} onPress={goBack}>
-            <Text style={styles.buttonText}>Back</Text>
-          </TouchableOpacity>
-        )}
-        {step !== "preview" && (
-          <TouchableOpacity style={styles.navButton} onPress={goNext}>
-            <Text style={styles.buttonText}>Next</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-    </ScrollView>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24 },
-  title: { fontSize: 24, fontWeight: "700", marginBottom: 16 },
+  root: { flex: 1, backgroundColor: "#17151a" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingTop: 56,
+    paddingHorizontal: 16,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+  },
+  progressTrack: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    overflow: "hidden",
+  },
+  progressFill: { height: 4, backgroundColor: "#e8c9d2", borderRadius: 2 },
+  scroll: { padding: 20, paddingBottom: 130 },
+  kicker: { color: "rgba(255,255,255,0.5)", fontSize: 13, marginTop: 8 },
+  title: { color: "#fff", fontSize: 40, fontFamily: SERIF, marginTop: 2 },
+  sub: {
+    color: "rgba(255,255,255,0.65)",
+    marginTop: 4,
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  card: {
+    padding: 18,
+    borderRadius: 22,
+    marginBottom: 14,
+    backgroundColor: "rgba(255,255,255,0.07)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
   label: {
+    color: "rgba(255,255,255,0.7)",
     fontSize: 14,
     fontWeight: "600",
-    color: "#6b7280",
-    marginBottom: 6,
-    marginTop: 8,
+    marginBottom: 10,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    marginTop: 16,
-    marginBottom: 4,
-  },
-  categoryContainer: {
+  stepper: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 28,
   },
+  stepBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  stepValue: {
+    color: "#fff",
+    fontSize: 44,
+    fontFamily: SERIF,
+    minWidth: 50,
+    textAlign: "center",
+  },
+  categoryContainer: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   categoryChip: {
     borderWidth: 1,
-    borderColor: "#d1d5db",
+    borderColor: "rgba(255,255,255,0.2)",
     borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
   },
-  categoryChipSelected: { backgroundColor: "#2089dc", borderColor: "#2089dc" },
-  categoryText: { color: "#374151" },
-  categoryTextSelected: { color: "#fff", fontWeight: "600" },
-  timeRow: { marginBottom: 8 },
-  hourScroll: { flexDirection: "row" },
+  categoryChipSelected: { backgroundColor: "#e8c9d2", borderColor: "#e8c9d2" },
+  categoryText: { color: "rgba(255,255,255,0.8)", textTransform: "capitalize" },
+  categoryTextSelected: {
+    color: "#2a1d24",
+    fontWeight: "700",
+    textTransform: "capitalize",
+  },
+  timeRow: { marginBottom: 6 },
   hourChip: {
     borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginRight: 6,
-  },
-  hourChipSelected: { backgroundColor: "#2089dc", borderColor: "#2089dc" },
-  hourText: { color: "#374151", fontSize: 13 },
-  hourTextSelected: { color: "#fff", fontWeight: "600", fontSize: 13 },
-  dayNav: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  dayTitle: { fontSize: 18, fontWeight: "700" },
-  arrow: { fontSize: 32, color: "#2089dc", paddingHorizontal: 12 },
-  arrowDisabled: { color: "#d1d5db" },
-  timeBlock: {
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 2,
-    justifyContent: "center",
-  },
-  timeBlockText: { fontSize: 12, fontWeight: "600", color: "#1f2937" },
-  tapHint: { fontSize: 11, color: "#6b7280", fontStyle: "italic" },
-  editPanel: {
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
+    borderColor: "rgba(255,255,255,0.18)",
     borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginRight: 8,
+    minWidth: 62,
+    alignItems: "center",
   },
-  placeOption: { padding: 12, borderBottomWidth: 1, borderBottomColor: "#eee" },
-  placeText: { fontSize: 15, fontWeight: "600" },
-  navRow: {
+  hourChipSelected: { backgroundColor: "#e8c9d2", borderColor: "#e8c9d2" },
+  hourText: { color: "rgba(255,255,255,0.8)", fontSize: 14 },
+  hourTextSelected: { color: "#2a1d24", fontWeight: "700", fontSize: 14 },
+  dayChip: {
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    borderRadius: 20,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    marginRight: 8,
+  },
+  dayChipSelected: { backgroundColor: "#e8c9d2", borderColor: "#e8c9d2" },
+  dayText: { color: "rgba(255,255,255,0.8)" },
+  dayTextSelected: { color: "#2a1d24", fontWeight: "700" },
+  legend: { flexDirection: "row", flexWrap: "wrap", gap: 14, marginBottom: 12 },
+  legendItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  legendText: { color: "rgba(255,255,255,0.6)", fontSize: 12 },
+  timeBlock: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 24,
-    marginBottom: 24,
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    marginBottom: 6,
+    borderLeftWidth: 4,
   },
-  navButton: {
-    backgroundColor: "#2089dc",
-    borderRadius: 8,
-    padding: 14,
-    paddingHorizontal: 24,
+  freeBlock: {
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "rgba(255,255,255,0.22)",
+    borderLeftWidth: 1,
+    backgroundColor: "rgba(255,255,255,0.03)",
   },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  timeText: { color: "rgba(255,255,255,0.6)", fontSize: 12 },
+  blockName: { color: "#fff", fontSize: 15.5, fontWeight: "600", marginTop: 1 },
+  addPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 2,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: "rgba(232,201,210,0.15)",
+  },
+  addPillText: { color: "#e8c9d2", fontWeight: "600", fontSize: 13 },
+  footer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: 20,
+    paddingBottom: 34,
+    backgroundColor: "rgba(23,21,26,0.92)",
+  },
+  primary: {
+    backgroundColor: "#e8c9d2",
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  primaryText: { color: "#2a1d24", fontSize: 16.5, fontWeight: "700" },
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  sheet: {
+    backgroundColor: "#211d24",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom: 36,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 6,
+  },
+  sheetTitle: { color: "#fff", fontSize: 28, fontFamily: SERIF },
+  placeOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)",
+  },
+  placeText: { flex: 1, color: "#fff", fontSize: 15.5 },
+  empty: {
+    color: "rgba(255,255,255,0.6)",
+    marginVertical: 24,
+    textAlign: "center",
+  },
 });

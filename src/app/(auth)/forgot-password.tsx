@@ -1,102 +1,40 @@
+import { AuthButton, AuthError, AuthInput, AuthShell, authLink } from "@/components/AuthShell";
 import { supabase } from "@/lib/auth/supabaseClient";
+import { heroImages } from "@/lib/images";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Text, TouchableOpacity } from "react-native";
 
 export default function ForgotPassword() {
-  const [email, setEmail] = useState("");
-  const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  async function handleResetPassword() {
-    const trimmed = email.trim();
-    if (!trimmed) return;
-
-    setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(trimmed);
+  async function submit() {
+    if (!email.trim()) return setError("Enter your email.");
+    setLoading(true); setError("");
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
     setLoading(false);
-
-    if (error) {
-      Alert.alert(error.message);
-      return;
-    }
-
-    router.push({
-      pathname: "/reset-password",
-      params: { email: trimmed },
-    });
+    if (error) return setError(error.message);
+    router.push({ pathname: "/reset-password", params: { email: email.trim() } });
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Reset your password</Text>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          onChangeText={setEmail}
-          value={email}
-          placeholder="email@address.com"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
-      </View>
-
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={handleResetPassword}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>
-          {loading ? "Sending..." : "Send Reset Code"}
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => router.push("/sign-in")}>
-        <Text style={styles.toggleText}>Back to sign in</Text>
-      </TouchableOpacity>
-    </View>
+    <AuthShell
+      image={heroImages.reset}
+      title="Reset password"
+      subtitle="Enter your email and we'll send you a 6-digit code."
+      footer={
+        <TouchableOpacity onPress={() => router.back()}>
+          <Text style={authLink}>Back to sign in</Text>
+        </TouchableOpacity>
+      }
+    >
+      <AuthError message={error} />
+      <AuthInput icon="mail-outline" placeholder="Email" value={email} onChangeText={setEmail}
+        keyboardType="email-address" autoComplete="email" />
+      <AuthButton label="Send Reset Code" onPress={submit} loading={loading} />
+    </AuthShell>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24 },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 32,
-    textAlign: "center",
-  },
-  field: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: "600", color: "#6b7280", marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: "#2089dc",
-    borderRadius: 8,
-    padding: 14,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  toggleText: {
-    textAlign: "center",
-    marginTop: 20,
-    color: "#2089dc",
-    fontSize: 14,
-  },
-});

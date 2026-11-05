@@ -1,110 +1,49 @@
+import { AuthButton, AuthError, AuthInput, AuthShell, authLink, authMuted } from "@/components/AuthShell";
 import { supabase } from "@/lib/auth/supabaseClient";
+import { heroImages } from "@/lib/images";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { Text, TouchableOpacity } from "react-native";
 
 export default function SignIn() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
-  async function signInWithEmail() {
-  setLoading(true);
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) {
-    Alert.alert(error.message);
-  } else {
+  async function submit() {
+    if (!email.trim() || !password) return setError("Enter your email and password.");
+    setLoading(true); setError("");
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    setLoading(false);
+    if (error) return setError(error.message);
     router.replace("/");
   }
-  setLoading(false);
-}
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome back</Text>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          onChangeText={setEmail}
-          value={email}
-          placeholder="email@address.com"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          onChangeText={setPassword}
-          value={password}
-          secureTextEntry
-          placeholder="Password"
-          autoCapitalize="none"
-          style={styles.input}
-        />
-      </View>
-
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={signInWithEmail}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>Sign In</Text>
+    <AuthShell
+      image={heroImages.auth}
+      title="Welcome back"
+      subtitle="Sign in to pick up where you left off."
+      footer={
+        <>
+          <Text style={authMuted}>New here?</Text>
+          <TouchableOpacity onPress={() => router.replace("/sign-up")}>
+            <Text style={authLink}>Create an account</Text>
+          </TouchableOpacity>
+        </>
+      }
+    >
+      <AuthError message={error} />
+      <AuthInput icon="mail-outline" placeholder="Email" value={email} onChangeText={setEmail}
+        keyboardType="email-address" autoComplete="email" />
+      <AuthInput icon="lock-closed-outline" placeholder="Password" value={password}
+        onChangeText={setPassword} secure />
+      <TouchableOpacity onPress={() => router.push("/forgot-password")} style={{ alignSelf: "flex-end", marginBottom: 6 }}>
+        <Text style={authLink}>Forgot password?</Text>
       </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => router.push("/sign-up")}>
-        <Text style={styles.toggleText}>Don't have an account? Sign up</Text>
-      </TouchableOpacity>
-      <TouchableOpacity onPress={() => router.push("/forgot-password")}>
-        <Text style={styles.toggleText}>Forgot your password?</Text>
-      </TouchableOpacity>
-    </View>
+      <AuthButton label="Sign in" onPress={submit} loading={loading} />
+    </AuthShell>
   );
 }
-
-
-
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24 },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 32,
-    textAlign: "center",
-  },
-  field: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: "600", color: "#6b7280", marginBottom: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: "#2089dc",
-    borderRadius: 8,
-    padding: 14,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  toggleText: {
-    textAlign: "center",
-    marginTop: 20,
-    color: "#2089dc",
-    fontSize: 14,
-  },
-});

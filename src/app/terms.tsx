@@ -1,43 +1,58 @@
 import LegalPage from "@/components/LegalPage";
 
+const CONTACT = "rizviaalia7861@gmail.com";
+
 export default function Terms() {
   return (
     <LegalPage
-      title="Terms & Conditions"
+      title="Terms of Use"
       updated="October 2026"
+      intro="SafePath is a personal project operated by Aalia Rizvi that helps you research destinations. By creating an account or using the app you agree to these terms."
       sections={[
         {
-          heading: "About this app",
-          body: "This is a personal portfolio project built by [your name]. By creating an account or using the app you agree to these terms.",
+          heading: "Guidance, not guarantees",
+          body: [
+            "Safety scores, news summaries, weather and travel tips are automatically generated from public sources and are for general guidance only. They can be incomplete, delayed or wrong.",
+            "SafePath is not a substitute for official government travel advice. Always check your government's current travel guidance before you travel, and use your own judgement.",
+          ],
         },
         {
-          heading: "Safety information is a guide, not advice",
-          body: "Safety ratings are generated automatically from news articles using keyword and sentiment analysis. They can be incomplete, out of date or wrong, and a missing rating does not mean a place is safe. Always check official government travel advice (for example the UK FCDO) and arrange travel insurance before you travel. You are responsible for your own travel decisions.",
+          heading: "Flights and prices",
+          body: [
+            "Flight routes are illustrative and use older public route data, so a suggested route may not currently be operated. Prices come from a third-party source and may change or be unavailable. SafePath does not sell tickets or take bookings.",
+          ],
+        },
+        {
+          heading: "AI assistant",
+          body: [
+            "The chat assistant uses an AI model. It can make mistakes, so check anything important, especially safety, health, visa and entry information, before relying on it.",
+          ],
         },
         {
           heading: "Your account",
-          body: "Keep your sign-in details private and use an email address you control. You are responsible for activity on your account.",
+          body: [
+            "You are responsible for keeping your password safe and for activity on your account. Please give a real email address and don't use the app to harm others or to attempt to disrupt or abuse the service.",
+          ],
         },
         {
-          heading: "Acceptable use",
-          body: "Do not misuse the app: no attempts to break it, overload it, scrape it, or access other people's data.",
-        },
-        {
-          heading: "Third-party data",
-          body: "Weather, news and place information come from third-party services (Open-Meteo, Perigon, Google Places). We do not guarantee their accuracy or availability.",
-        },
-        {
-          heading: "Availability",
-          body: "The app is provided as is. As a personal project it may change, break, or be taken down at any time.",
+          heading: "Availability and changes",
+          body: [
+            "The app is provided as is, without warranties, and may change, be interrupted or be withdrawn at any time. We may update these terms, and continuing to use the app means you accept the updated version.",
+          ],
         },
         {
           heading: "Liability",
-          body: "To the extent the law allows, we are not liable for loss or harm arising from your reliance on the app. Nothing in these terms limits liability that cannot be limited by law, including for death or personal injury caused by negligence, or for fraud.",
+          body: [
+            "To the extent the law allows, SafePath and its creator are not liable for loss, injury or damage arising from your use of, or reliance on, information in the app. Nothing here limits liability that cannot be limited by law.",
+          ],
         },
         {
-          heading: "Changes and governing law",
-          body: "We may update these terms and will change the date above when we do. These terms are governed by the laws of England and Wales. Contact: [your email].",
+          heading: "Third-party content",
+          body: [
+            "News, weather, place and flight information come from third-party providers and belong to them. Some photos come from Pexels contributors.",
+          ],
         },
+        { heading: "Contact", body: [`Questions about these terms: ${CONTACT}`] },
       ]}
     />
   );

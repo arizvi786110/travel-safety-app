@@ -1,118 +1,88 @@
+import { AuthButton, AuthError, AuthInput, AuthShell, authLink, authMuted } from "@/components/AuthShell";
 import { supabase } from "@/lib/auth/supabaseClient";
+import { heroImages } from "@/lib/images";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import {
-    Alert,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
-} from "react-native";
+import { Text, TouchableOpacity } from "react-native";
 
 export default function SignUp() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [code, setCode] = useState("");
+  const [step, setStep] = useState<"form" | "code">("form");
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(false);
-  const router = useRouter();
 
-  async function signUpWithEmail() {
-  setLoading(true);
-  const { data: { session }, error } = await supabase.auth.signUp({ email, password });
-  if (error) {
-    Alert.alert(error.message);
-  } else if (!session) {
-    Alert.alert(
-      "Check your inbox",
-      "Please verify your email, then sign in.",
-      [{ text: "OK", onPress: () => router.replace("/sign-in") }]
-    );
-  } else {
+  async function submit() {
+    if (!email.trim()) return setError("Enter your email.");
+    if (password.length < 8) return setError("Password must be at least 8 characters.");
+    if (password !== confirm) return setError("Passwords don't match.");
+    setLoading(true); setError("");
+    const { data, error } = await supabase.auth.signUp({ email: email.trim(), password });
+    setLoading(false);
+    if (error) return setError(error.message);
+    if (data.session) return router.replace("/"); // email confirmation switched off
+    setStep("code");
+  }
+
+  async function verify() {
+    setLoading(true); setError("");
+    const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: code.trim(), type: "email" });
+    setLoading(false);
+    if (error) return setError(error.message);
     router.replace("/");
   }
-  setLoading(false);
-}
+
+  async function resend() {
+    setError(""); setInfo("");
+    const { error } = await supabase.auth.resend({ type: "signup", email: email.trim() });
+    if (error) setError(error.message); else setInfo("New code sent.");
+  }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Create an account</Text>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          onChangeText={setEmail}
-          value={email}
-          placeholder="email@address.com"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          style={styles.input}
-        />
-      </View>
-
-      <View style={styles.field}>
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          onChangeText={setPassword}
-          value={password}
-          secureTextEntry
-          placeholder="Password"
-          autoCapitalize="none"
-          style={styles.input}
-        />
-      </View>
-
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled]}
-        onPress={signUpWithEmail}
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>Sign Up</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity onPress={() => router.push("/sign-in")}>
-        <Text style={styles.toggleText}>Already have an account? Sign in</Text>
-      </TouchableOpacity>
-      <Text style={styles.legalText}>
-        By signing up you agree to our{" "}
-        <Text style={styles.legalLink} onPress={() => router.push("/terms")}>Terms</Text>{" "}
-        and{" "}
-        <Text style={styles.legalLink} onPress={() => router.push("/privacy-policy")}>Privacy Policy</Text>.
-      </Text>
-    </View>
+    <AuthShell
+      image={heroImages.auth}
+      title={step === "form" ? "Create account" : "Check your email"}
+      subtitle={step === "form" ? "It takes a minute." : `We sent a 6-digit code to ${email.trim()}.`}
+      footer={
+        <>
+          <Text style={authMuted}>Already registered?</Text>
+          <TouchableOpacity onPress={() => router.replace("/sign-in")}>
+            <Text style={authLink}>Sign in</Text>
+          </TouchableOpacity>
+        </>
+      }
+    >
+      <AuthError message={error} />
+      {info ? <Text style={{ color: "#86efac", marginBottom: 8 }}>{info}</Text> : null}
+      {step === "form" ? (
+        <>
+          <AuthInput icon="mail-outline" placeholder="Email" value={email} onChangeText={setEmail}
+            keyboardType="email-address" autoComplete="email" />
+          <AuthInput icon="lock-closed-outline" placeholder="Password (8+ characters)" value={password}
+            onChangeText={setPassword} secure />
+          <AuthInput icon="lock-closed-outline" placeholder="Confirm password" value={confirm}
+            onChangeText={setConfirm} secure />
+          <AuthButton label="Create account" onPress={submit} loading={loading} />
+          <Text style={[authMuted, { fontSize: 12, textAlign: "center", marginTop: 12 }]}>
+            By continuing you agree to our{" "}
+            <Text style={authLink} onPress={() => router.push("/terms")}>Terms</Text> and{" "}
+            <Text style={authLink} onPress={() => router.push("/privacy-policy")}>Privacy Policy</Text>.
+          </Text>
+        </>
+      ) : (
+        <>
+          <AuthInput icon="keypad-outline" placeholder="6-digit code" value={code}
+            onChangeText={setCode} keyboardType="number-pad" maxLength={6} />
+          <AuthButton label="Verify" onPress={verify} loading={loading} />
+          <TouchableOpacity onPress={resend} style={{ alignSelf: "center", marginTop: 14 }}>
+            <Text style={authLink}>Resend code</Text>
+          </TouchableOpacity>
+        </>
+      )}
+    </AuthShell>
   );
 }
-const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: "center", padding: 24 },
-  title: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 32,
-    textAlign: "center",
-  },
-  field: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: "600", color: "#6b7280", marginBottom: 6 },
-    legalText: { textAlign: "center", marginTop: 20, color: "#6b7280", fontSize: 12 },
-  legalLink: { color: "#2089dc" },
-  input: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: "#2089dc",
-    borderRadius: 8,
-    padding: 14,
-    alignItems: "center",
-    marginTop: 8,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  toggleText: {
-    textAlign: "center",
-    marginTop: 20,
-    color: "#2089dc",
-    fontSize: 14,
-  },
-});

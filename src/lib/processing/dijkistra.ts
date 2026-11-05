@@ -55,7 +55,10 @@ export function dijkistras(
     const nextTo = graph[currentNode] || [];
     for (const edge of nextTo) {
       const newDist = distances[currentNode] + edge.weight;
-      if (newDist < distances[edge.destination]) {
+      // Airports that only appear as a destination are not keys in the graph, so
+      // their distance starts undefined. Treat that as Infinity so they can be reached.
+      const current = distances[edge.destination] ?? Infinity;
+      if (newDist < current) {
         distances[edge.destination] = newDist;
         queue.push(edge.destination);
       }
@@ -73,7 +76,6 @@ export async function getGraph(): Promise<Graph> {
   const graph: Graph = {};
   const pageSize = 1000;
   let from = 0;
-  let failed = false;
 
   while (true) {
     const { data, error } = await supabase
@@ -83,10 +85,7 @@ export async function getGraph(): Promise<Graph> {
       .order("destination_id")
       .range(from, from + pageSize - 1);
 
-    if (error) {
-      failed = true;
-      break;
-    }
+    if (error) throw error;
     if (!data || data.length === 0) break;
 
     for (const row of data) {
@@ -100,6 +99,6 @@ export async function getGraph(): Promise<Graph> {
     from += pageSize;
   }
 
-  if (!failed) cachedGraph = graph;
+  cachedGraph = graph;
   return graph;
 }

@@ -1,42 +1,59 @@
 import LegalPage from "@/components/LegalPage";
 
+const CONTACT = "rizviaalia7861@gmail.com";
+
 export default function PrivacyPolicy() {
   return (
     <LegalPage
       title="Privacy Policy"
       updated="October 2026"
+      intro="SafePath is operated by Aalia Rizvi, who is responsible for the personal data described in this policy. You can contact her at the email address at the bottom of this page."
       sections={[
         {
-          heading: "Who we are",
-          body: "This app is a personal portfolio project built by [your name]. Questions or requests about your data: [your email].",
-        },
-        {
           heading: "What we collect",
-          body: "Your email address and password (your password is stored in hashed form by our authentication provider, so we never see it); an optional home country; destinations you save as favourites; itineraries you save; the cities you search for; and the messages you send to the chat assistant.",
+          body: [
+            "Account details: your email address and a password (stored securely hashed by our authentication provider, never in plain text).",
+            "Your content: favourites, saved itineraries, your home country setting, and the messages you send to the assistant.",
+            "We do not collect your precise device location, contacts or photos.",
+          ],
         },
         {
           heading: "How we use it",
-          body: "To sign you in, show your saved data, and produce safety information, weather, nearby places, flight routes and chat answers. We do not sell your data or use it for advertising.",
+          body: [
+            "To sign you in, save your trips and settings, show relevant safety information, and answer your questions in the assistant. We do not sell your data and do not use it for advertising.",
+          ],
         },
         {
-          heading: "Who processes it for us",
-          body: "Supabase hosts our database and sign-in. Groq processes your chat messages to generate replies. Open-Meteo receives city names and coordinates for weather and location lookup. Perigon receives city names to find news articles. Google Places receives city coordinates to find nearby places.",
+          heading: "Services that process data",
+          body: [
+            "Supabase stores your account and saved data. Your assistant messages are sent to an AI model provider to generate replies. Destination names and travel dates you search may be sent to news, weather, maps/places and flight-price providers to fetch results. These providers process data under their own policies.",
+          ],
         },
         {
-          heading: "Storage and security",
-          body: "Your account data, favourites and itineraries are stored in Supabase until you ask us to delete them. Chat history is kept on your device during a conversation and is not saved by the app afterwards. Your sign-in session is stored in your device's secure storage, and data is sent over encrypted connections.",
+          heading: "Retention",
+          body: [
+            "We keep your data while your account exists. You can delete your account at any time from Profile → Delete account, which permanently removes your account, favourites, saved itineraries and settings.",
+          ],
         },
         {
           heading: "Your rights",
-          body: "Under UK data protection law you can ask to see, correct or delete your data. There is no in-app delete button yet, so email [your email] and we will delete your account and its data.",
+          body: [
+            "You can delete your account yourself in the app. For anything else (access or correction), contact us.",
+          ],
+        },
+        {
+          heading: "Security",
+          body: [
+            "Data is sent over encrypted connections and access is restricted, but no system is perfectly secure.",
+          ],
         },
         {
           heading: "Children",
-          body: "This app is not intended for children under 13.",
+          body: ["SafePath is not intended for children under 13."],
         },
         {
-          heading: "Changes",
-          body: "If this policy changes, we will update the date above.",
+          heading: "Contact",
+          body: [`Privacy questions or requests: ${CONTACT}`],
         },
       ]}
     />
