@@ -18,7 +18,6 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ImageBackground,
   Keyboard,
   Pressable,
@@ -30,6 +29,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { authFetch } from "@/lib/auth/authFetch";
+import { Alert } from "@/lib/alerts";
 
 const AUTO_SEARCH_CAPITAL = false;
 

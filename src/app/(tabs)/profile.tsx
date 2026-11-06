@@ -5,9 +5,10 @@ import { useRouter } from "expo-router";
 import { authFetch } from "@/lib/auth/authFetch";
 import { useEffect, useState } from "react";
 import {
-  ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView,
+  ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from "react-native";
+import { Alert } from "@/lib/alerts";
 
 const SERIF = "CormorantGaramond_600SemiBold";
 

@@ -9,7 +9,6 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     Image,
     ImageBackground,
@@ -20,6 +19,7 @@ import {
     View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Alert } from "@/lib/alerts";
 
 type Favourite = {
   fav_locationid: number | string;

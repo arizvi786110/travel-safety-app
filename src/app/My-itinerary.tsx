@@ -6,7 +6,6 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Modal,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,7 @@ import {
   View,
 } from "react-native";
 import { InlineError } from "@/components/ErrorScreen";
+import { Alert } from "@/lib/alerts";
 
 type ScheduleEntry = {
   start: number;

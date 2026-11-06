@@ -10,7 +10,6 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ImageBackground,
   Pressable,
   RefreshControl,
@@ -21,6 +20,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Alert } from "@/lib/alerts";
 
 type Entry = { start: number; end: number; type: string; name?: string };
 
