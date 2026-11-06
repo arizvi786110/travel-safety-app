@@ -167,7 +167,6 @@ export default function GlobeExplorer({
               console.log("Globe error:", msg.message);
             }
           } catch {
-            // ignore malformed messages
           }
         }}
       />

@@ -11,6 +11,7 @@ import {
     ActivityIndicator,
     Alert,
     FlatList,
+    Image,
     ImageBackground,
     Pressable,
     RefreshControl,
@@ -33,12 +34,13 @@ type Item = Favourite | typeof SPACER;
 
 const API = process.env.EXPO_PUBLIC_API_URL;
 
-async function authHeaders() {//asks Supabase client for current session 
+async function authHeaders() {
+  //asks Supabase client for current session
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  return { Authorization: `Bearer ${session?.access_token}` };//token is short lived that the client refreshes automatically
-}//
+  return { Authorization: `Bearer ${session?.access_token}` }; //token is short lived that the client refreshes automatically
+} //
 
 export default function Favourites() {
   const router = useRouter();
@@ -48,9 +50,11 @@ export default function Favourites() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {//loda is for fetch 
+  const load = useCallback(async () => {
+    //loda is for fetch
     try {
-      const response = await fetch(`${API}/favourites-api`, {//so that a non-JSON error page can't throw
+      const response = await fetch(`${API}/favourites-api`, {
+        //so that a non-JSON error page can't throw
         headers: await authHeaders(),
       });
       const result = await response.json().catch(() => ({}));
@@ -61,7 +65,9 @@ export default function Favourites() {
         setError(messageForStatus(response.status, "your favourites"));
       }
     } catch {
-      setError("Couldn't reach the server. Check your connection and try again.");
+      setError(
+        "Couldn't reach the server. Check your connection and try again.",
+      );
     }
     setLoading(false);
     setRefreshing(false);
@@ -74,7 +80,8 @@ export default function Favourites() {
     }, [load]),
   );
 
-  function confirmRemove(fav: Favourite) {//sends a DELETE and ony updates the list once the server has confirmed
+  function confirmRemove(fav: Favourite) {
+    //sends a DELETE and ony updates the list once the server has confirmed
     Alert.alert(
       "Remove favourite",
       `Remove ${fav.location?.city ?? "this place"} from your favourites?`,
@@ -132,24 +139,45 @@ export default function Favourites() {
             router.push({ pathname: "/explore", params: { city } })
           }
         >
+            
           <ImageBackground
             source={themeImage(item.theme)}
             style={styles.card}
-            imageStyle={{ borderRadius: radius.md }}
+            imageStyle={{
+              borderRadius: radius.md,
+              width: "100%",
+              height: "100%",
+            }}
           >
-            <LinearGradient
-              colors={["transparent", colors.overlayBottom]}
-              style={[StyleSheet.absoluteFill, { borderRadius: radius.md }]}
-            />
-            <Text style={styles.city} numberOfLines={1}>
-              {city}
-            </Text>
-            <Text style={styles.country} numberOfLines={1}>
-              {item.location?.country}
-            </Text>
-            {item.season !== "now" ? (
-              <Text style={styles.season}>{item.season}</Text>
-            ) : null}
+            <View style={styles.card}>
+              <Image
+                source={themeImage(item.theme)}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: "100%",
+                }}
+                resizeMode="cover"
+              />
+             <LinearGradient
+     colors={["transparent", "transparent", "rgba(0,0,0,0.7)"]}
+     locations={[0, 0.55, 1]}
+     style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+   />
+              <View style={styles.cardText}>
+                <Text style={styles.city} numberOfLines={1}>
+                  {city}
+                </Text>
+                <Text style={styles.country} numberOfLines={1}>
+                  {item.location?.country}
+                </Text>
+                {item.season !== "now" ? (
+                  <Text style={styles.season}>{item.season}</Text>
+                ) : null}
+              </View>
+            </View>
           </ImageBackground>
         </Pressable>
 
@@ -248,7 +276,6 @@ export default function Favourites() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   cardWrap: { flex: 1 },
-  card: { aspectRatio: 0.85, justifyContent: "flex-end", padding: 12 },
   city: { fontFamily: fonts.heading, color: colors.text, fontSize: 22 },
   country: { color: colors.textMuted, fontSize: 12 },
   season: {
@@ -265,6 +292,8 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     textTransform: "capitalize",
   },
+  card: { aspectRatio: 0.8, overflow: "hidden", borderRadius: radius.md },
+  cardText: { flex: 1, justifyContent: "flex-end", padding: 12 },
   heart: {
     position: "absolute",
     top: 10,

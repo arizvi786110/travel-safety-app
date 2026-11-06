@@ -1,5 +1,6 @@
-import { supabase } from "@/lib/auth/supabase";
+
 import { Coordinates } from "@/lib/types";
+import graphData from "./graph.json";
 
 export function haversine(coord1: Coordinates, coord2: Coordinates): number {
   const rlat1 = coord1.latitude * (Math.PI / 180);
@@ -26,79 +27,67 @@ type Edge = {
 
 type Graph = Record<string, Edge[]>;
 
-export function dijkistras(
-  graph: Graph,
-  source: string,
-): Record<string, number> {
+export function dijkistras(graph: Graph, source: string): Record<string, number> {
   const distances: Record<string, number> = {};
-  for (const node in graph) {
-    distances[node] = Infinity;
-  }
+  for (const node in graph) distances[node] = Infinity;
   distances[source] = 0;
 
-  const queue: string[] = [source];
-  const visited = new Set<string>();
-
-  while (queue.length > 0) {
-    let smallestIndex = 0;
-    for (let i = 1; i < queue.length; i++) {
-      if (distances[queue[i]] < distances[queue[smallestIndex]]) {
-        smallestIndex = i;
+  // Min-heap of [distance, node]
+  const heap: [number, string][] = [[0, source]];
+  const push = (item: [number, string]) => {
+    heap.push(item);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (heap[p][0] <= heap[i][0]) break;
+      [heap[p], heap[i]] = [heap[i], heap[p]];
+      i = p;
+    }
+  };
+  const pop = (): [number, string] => {
+    const top = heap[0];
+    const last = heap.pop()!;
+    if (heap.length > 0) {
+      heap[0] = last;
+      let i = 0;
+      while (true) {
+        const l = 2 * i + 1;
+        const r = l + 1;
+        let m = i;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === i) break;
+        [heap[m], heap[i]] = [heap[i], heap[m]];
+        i = m;
       }
     }
-    const currentNode = queue[smallestIndex];
-    queue.splice(smallestIndex, 1);
+    return top;
+  };
 
-    if (visited.has(currentNode)) continue;
-    visited.add(currentNode);
-
-    const nextTo = graph[currentNode] || [];
-    for (const edge of nextTo) {
-      const newDist = distances[currentNode] + edge.weight;
-      // Airports that only appear as a destination are not keys in the graph, so
-      // their distance starts undefined. Treat that as Infinity so they can be reached.
-      const current = distances[edge.destination] ?? Infinity;
-      if (newDist < current) {
-        distances[edge.destination] = newDist;
-        queue.push(edge.destination);
+  const visited = new Set<string>();
+  while (heap.length > 0) {
+    const [dist, node] = pop();
+    if (visited.has(node)) continue;
+    visited.add(node);
+    for (const edge of graph[node] ?? []) {
+      const next = dist + edge.weight;
+      // Destination-only airports are not keys in the graph, so treat them as Infinity
+      if (next < (distances[edge.destination] ?? Infinity)) {
+        distances[edge.destination] = next;
+        push([next, edge.destination]);
       }
     }
   }
-
   return distances;
 }
 
 let cachedGraph: Graph | null = null;
 
+const graph: Graph = {};
+for (const [source, edges] of Object.entries(graphData as unknown as Record<string, [string, number][]>)) {
+  graph[source] = edges.map(([destination, weight]) => ({ destination, weight }));
+}
+
 export async function getGraph(): Promise<Graph> {
-  if (cachedGraph) return cachedGraph;
-
-  const graph: Graph = {};
-  const pageSize = 1000;
-  let from = 0;
-
-  while (true) {
-    const { data, error } = await supabase
-      .from("graph_edges")
-      .select("*")
-      .order("source_id")
-      .order("destination_id")
-      .range(from, from + pageSize - 1);
-
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-
-    for (const row of data) {
-      if (!graph[row.source_id]) {
-        graph[row.source_id] = [];
-      }
-      graph[row.source_id].push({ destination: row.destination_id, weight: row.weight });
-    }
-
-    if (data.length < pageSize) break;
-    from += pageSize;
-  }
-
-  cachedGraph = graph;
   return graph;
 }

@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import ErrorScreen from "@/components/ErrorScreen";
 import type { ErrorBoundaryProps } from "expo-router";
 import OfflineBanner from "@/components/OfflineBanner";
+import { View } from "react-native";
 
 export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
   return (
@@ -69,22 +70,23 @@ export default function RootLayout() {
   }
 
   return (
-    <>
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="flight-planner" options={{ headerShown: false }} />
-      <Stack.Screen name="chatbot" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="user-saved-itineraries"
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen name="terms" options={{ headerShown: false }} />
-      <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
-      <Stack.Screen name="reset-password" options={{ headerShown: false }} />
-      <Stack.Screen name="My-itinerary" options={{ headerShown: false }} />
-    </Stack>
-    <OfflineBanner />
-    </>
+    <View style={{ flex: 1, backgroundColor: "#17151a", alignItems: "center" }}>
+      {/* On wide screens the app sits in a phone-width column. overflow hidden keeps
+          full-bleed images from spilling outside it. */}
+      <View style={{ flex: 1, width: "100%", maxWidth: 560, overflow: "hidden" }}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="flight-planner" options={{ headerShown: false }} />
+          <Stack.Screen name="chatbot" options={{ headerShown: false }} />
+          <Stack.Screen name="user-saved-itineraries" options={{ headerShown: false }} />
+          <Stack.Screen name="terms" options={{ headerShown: false }} />
+          <Stack.Screen name="privacy-policy" options={{ headerShown: false }} />
+          <Stack.Screen name="reset-password" options={{ headerShown: false }} />
+          <Stack.Screen name="My-itinerary" options={{ headerShown: false }} />
+        </Stack>
+        <OfflineBanner />
+      </View>
+    </View>
   );
 }

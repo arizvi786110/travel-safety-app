@@ -1,29 +1,32 @@
 import { supabase } from "@/lib/auth/supabase";
-import { dijkistras, getGraph } from "@/lib/processing/dijkistra";
 import { verifySession } from "@/lib/auth/verifySession";
 import { rateLimited } from "@/lib/http";
+import { dijkistras, getGraph } from "@/lib/processing/dijkistra";
 
 function escapeLike(value: string) {
   return value.replace(/[\\%_]/g, "\\$&");
 }
 
 async function findAirports(city: string) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("airport_lookup")
     .select("*")
     .ilike("city", escapeLike(city));
+  if (error) throw error;
   return data ?? [];
 }
 
 export async function GET(request: Request) {
-    const { user, error: authError } = await verifySession(
+  const { user, error: authError } = await verifySession(
     request.headers.get("Authorization") ?? undefined,
   );
   if (!user) {
     return new Response(JSON.stringify({ error: authError }), { status: 401 });
   }
   if (rateLimited(`flight-search:${user.id}`, 30)) {
-    return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429 });
+    return new Response(JSON.stringify({ error: "Too many requests" }), {
+      status: 429,
+    });
   }
   const url = new URL(request.url);
   const from = url.searchParams.get("from");
@@ -35,7 +38,9 @@ export async function GET(request: Request) {
     });
   }
   if (from.length > 100 || to.length > 100) {
-    return new Response(JSON.stringify({ error: "City name too long" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "City name too long" }), {
+      status: 400,
+    });
   }
 
   try {
@@ -114,6 +119,10 @@ export async function GET(request: Request) {
 
     return new Response(JSON.stringify({ route: best }), { status: 200 });
   } catch (err) {
+    console.error(
+      "flight-search failed:",
+      err instanceof Error ? err.message : err,
+    );
     return new Response(
       JSON.stringify({ error: "Something went wrong finding a route." }),
       { status: 500 },

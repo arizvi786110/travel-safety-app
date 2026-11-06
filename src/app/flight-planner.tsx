@@ -225,7 +225,7 @@ export default function FlightPlanner() {
       })
       .catch(() => setNetwork({ status: "error" }));
 
-    fetch(`${API}/location_detail?city=${encodeURIComponent(toCity)}`)
+    authFetch(`${API}/location_detail?city=${encodeURIComponent(toCity)}`)
       .then(async (r) => {
         if (r.ok) {
           const data = await r.json();

@@ -131,7 +131,7 @@ export function HeroImage({
   style?: ViewStyle;
 }) {
   return (
-    <ImageBackground source={source} style={[{ height }, style]} resizeMode="cover">
+    <ImageBackground source={source} style={[{ height, overflow: "hidden" }, style]} resizeMode="cover">
       <LinearGradient
         colors={[colors.overlayTop, colors.overlayBottom]}
         style={StyleSheet.absoluteFill}
